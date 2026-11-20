@@ -568,6 +568,7 @@ function isEditor() {
 }
 
 function updateEditButton() {
+  if (!els.editBtn) return;
   const show = isEditor() && !!CONFIG.editUrl;
   els.editBtn.hidden = !show;
   if (show) els.editBtn.href = CONFIG.editUrl;
@@ -632,6 +633,19 @@ if (typeof Papa === 'undefined') {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW no registrado:', e));
+    // Si un service worker nuevo toma el control (app actualizada), recarga una vez para usarlo.
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        // Busca actualizaciones también al volver a la app.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch((e) => console.warn('SW no registrado:', e));
   });
 }

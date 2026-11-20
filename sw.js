@@ -1,6 +1,6 @@
 /* Service worker: cachea la "cáscara" de la app y trae el CSV siempre desde la red primero.
  * Si cambias archivos de la app, sube el número de versión para forzar la actualización. */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL_CACHE = `shell-${VERSION}`;
 const DATA_CACHE = 'data';
 
@@ -63,21 +63,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2) Cáscara de la app: responde desde caché y actualiza en segundo plano.
-  const isShell = url.origin === self.location.origin || url.hostname === 'cdnjs.cloudflare.com';
-  if (!isShell) return;
+  // 2) Librería del CDN (versión fija, nunca cambia): caché primero.
+  if (url.hostname === 'cdnjs.cloudflare.com') {
+    event.respondWith(caches.match(req).then((c) => c || fetch(req)));
+    return;
+  }
+
+  // 3) Archivos de la app: red primero (siempre la versión más nueva);
+  //    si no hay conexión o tarda más de 4 s, la copia guardada.
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(SHELL_CACHE);
-    const cached = await cache.match(req, { ignoreSearch: req.mode === 'navigate' });
-    const network = fetch(req).then((res) => {
+    const fromCache = () => cache.match(req, { ignoreSearch: true })
+      .then((c) => c || (req.mode === 'navigate' ? cache.match('./index.html') : undefined));
+    const network = fetch(req, { cache: 'no-cache' }).then((res) => {
       if (res.ok) cache.put(req, res.clone());
       return res;
-    }).catch(() => null);
-    if (cached) { event.waitUntil(network); return cached; }
-    const res = await network;
-    if (res) return res;
-    if (req.mode === 'navigate') return cache.match('./index.html');
-    return Response.error();
+    });
+    const timeout = new Promise((resolve) => setTimeout(resolve, 4000));
+    try {
+      const res = await Promise.race([network, timeout]);
+      if (res) return res;
+      return (await fromCache()) || (await network);
+    } catch (_) {
+      return (await fromCache()) || Response.error();
+    }
   })());
 });
