@@ -12,6 +12,15 @@ const CONFIG = {
   //    (requiere que la hoja esté compartida como "Cualquier persona con el enlace").
   csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS6N4bpo-a3FLFLWrDYMkBFrbUqXbpezgoOYf8w5yvUUKgLK0SaJGkF1Rob4aT4cWUCWLqH-XPHOEG2/pub?output=csv',
 
+  // Enlace de EDICIÓN de la hoja (el que ves al abrirla en el navegador: .../d/XXXX/edit).
+  // El botón ✏️ solo aparece en modo editor. La seguridad la da Google: solo tu cuenta puede editar.
+  editUrl: '',
+
+  // SHA-256 de tu clave de editor. El modo editor se activa abriendo la app con ?editor=TU_CLAVE
+  // (o tocando 5 veces el título y pegando la clave). Se desactiva con ?editor=off.
+  // Para cambiar la clave: calcula el SHA-256 de la nueva y pégalo aquí.
+  editorKeyHash: '98caa1e17a52d028a125422a826fc312a48160ea6a41b1e4e029de2cae21069c',
+
   // En el teléfono, agrupar las tarjetas por la primera columna cuando ésta se repite
   // (p. ej. una tarjeta por grúa con sus calles). false = una tarjeta por fila.
   groupCardsByFirstColumn: true,
@@ -29,6 +38,7 @@ const els = {
   title: $('#title'),
   updated: $('#updated'),
   refreshBtn: $('#refreshBtn'),
+  editBtn: $('#editBtn'),
   search: $('#search'),
   sortSelect: $('#sortSelect'),
   sortDirBtn: $('#sortDirBtn'),
@@ -544,7 +554,72 @@ window.addEventListener('offline', () => {
   });
 })();
 
+/* ---------- Modo editor (solo muestra el botón; la seguridad real es la cuenta de Google) ---------- */
+
+const EDITOR_KEY = 'sheet-dashboard:editor';
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function isEditor() {
+  try { return localStorage.getItem(EDITOR_KEY) === CONFIG.editorKeyHash; } catch (_) { return false; }
+}
+
+function updateEditButton() {
+  const show = isEditor() && !!CONFIG.editUrl;
+  els.editBtn.hidden = !show;
+  if (show) els.editBtn.href = CONFIG.editUrl;
+}
+
+async function tryActivateEditor(key) {
+  if (!key || !CONFIG.editorKeyHash || !window.crypto?.subtle) return false;
+  if (await sha256(key.trim()) !== CONFIG.editorKeyHash) return false;
+  try { localStorage.setItem(EDITOR_KEY, CONFIG.editorKeyHash); } catch (_) { return false; }
+  updateEditButton();
+  return true;
+}
+
+async function initEditorMode() {
+  const url = new URL(location.href);
+  const key = url.searchParams.get('editor');
+  if (key !== null) {
+    if (key === 'off') {
+      try { localStorage.removeItem(EDITOR_KEY); } catch (_) { /* ignore */ }
+    } else {
+      await tryActivateEditor(key);
+    }
+    // Quita la clave de la barra de direcciones y del historial.
+    url.searchParams.delete('editor');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+  updateEditButton();
+
+  // Plan B (útil en iPhone): 5 toques seguidos en el título para ingresar la clave.
+  let taps = 0, tapTimer;
+  els.title.addEventListener('click', async () => {
+    taps++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { taps = 0; }, 1500);
+    if (taps < 5) return;
+    taps = 0;
+    if (isEditor()) {
+      if (confirm('Modo editor activo. ¿Desactivarlo en este dispositivo?')) {
+        try { localStorage.removeItem(EDITOR_KEY); } catch (_) { /* ignore */ }
+        updateEditButton();
+      }
+      return;
+    }
+    const k = prompt('Clave de editor:');
+    if (k === null) return;
+    alert(await tryActivateEditor(k) ? 'Modo editor activado.' : 'Clave incorrecta.');
+  });
+}
+
 /* ---------- Inicio ---------- */
+
+initEditorMode();
 
 document.title = CONFIG.title;
 els.title.textContent = CONFIG.title;

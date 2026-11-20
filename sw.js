@@ -1,6 +1,6 @@
 /* Service worker: cachea la "cáscara" de la app y trae el CSV siempre desde la red primero.
  * Si cambias archivos de la app, sube el número de versión para forzar la actualización. */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = `shell-${VERSION}`;
 const DATA_CACHE = 'data';
 
