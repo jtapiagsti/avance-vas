@@ -14,7 +14,7 @@ const CONFIG = {
 
   // Enlace de EDICIÓN de la hoja (el que ves al abrirla en el navegador: .../d/XXXX/edit).
   // El botón ✏️ solo aparece en modo editor. La seguridad la da Google: solo tu cuenta puede editar.
-  editUrl: '',
+  editUrl: 'https://docs.google.com/spreadsheets/d/1V0ZY1iTSO9pM0argyHjlWao1xteNBV5ZKv66B2X9LWk/edit?gid=755753427#gid=755753427',
 
   // SHA-256 de tu clave de editor. El modo editor se activa abriendo la app con ?editor=TU_CLAVE
   // (o tocando 5 veces el título y pegando la clave). Se desactiva con ?editor=off.
